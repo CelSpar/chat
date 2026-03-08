@@ -6,11 +6,18 @@
 <title>Realtime Chat</title>
 
 <style>
-
 :root{
 --primary:#0084ff;
 --primary-dark:#006edc;
 --bg:#f0f2f5;
+--text:#111;
+--update-bg:#fff;
+}
+
+body.dark{
+--bg:#111;
+--text:#f0f0f0;
+--update-bg:#222;
 }
 
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -18,11 +25,11 @@
 body{
 font-family:system-ui,sans-serif;
 background:var(--bg);
+color:var(--text);
 height:100vh;
 display:flex;
 flex-direction:column;
 overflow:hidden;
-color:#111;
 }
 
 /* UPDATE SCREEN */
@@ -35,7 +42,36 @@ align-items:center;
 gap:20px;
 padding:40px;
 text-align:left;
+position:relative;
+background:var(--update-bg);
+border-radius:10px;
+max-width:480px;
+margin:40px auto;
+box-shadow:0 4px 15px rgba(0,0,0,0.2);
 }
+
+/* Dark/Light toggle button */
+#theme-toggle{
+position:absolute;
+top:20px;
+right:20px;
+padding:6px 12px;
+border:none;
+border-radius:8px;
+cursor:pointer;
+background:var(--primary);
+color:white;
+font-weight:600;
+}
+
+#update-log{
+line-height:1.7;
+font-size:15px;
+max-width:420px;
+}
+
+/* show/hide old versions */
+#older-versions{display:none; margin-top:10px;}
 
 /* LOGIN */
 #nickname-screen{
@@ -180,7 +216,6 @@ a{color:#006edc;}
 from{opacity:0;transform:translateY(6px);}
 to{opacity:1;transform:translateY(0);}
 }
-
 </style>
 </head>
 
@@ -188,9 +223,18 @@ to{opacity:1;transform:translateY(0);}
 
 <!-- UPDATE SCREEN -->
 <div id="update-screen">
-<h2>Improved to 1.2.2 Version!</h2>
-<div style="line-height:1.7;font-size:15px;max-width:420px">
-<b>Update Log</b><br><br>
+<button id="theme-toggle">Dark Mode</button>
+<h2>Improved to 1.2.3 Version!</h2>
+<div id="update-log">
+<b>This Update:</b><br><br>
+✅ more emojis<br>
+✅ Dark&Light mode<br>
+✅ Update Panel<br>
+✅ Minor bug fixs<br><br>
+
+<button id="show-all-btn">Show All Versions</button>
+
+<div id="older-versions">
 <b>1.2.2</b><br>
 ✅ Click message to open reaction panel<br>
 ✅ Reactions stored in database<br>
@@ -206,6 +250,8 @@ to{opacity:1;transform:translateY(0);}
 ✅ Message reactions<br><br>
 — Dev <b>parrotxie</b>
 </div>
+</div>
+
 <button onclick="enterLogin()">Continue</button>
 </div>
 
@@ -232,7 +278,6 @@ to{opacity:1;transform:translateY(0);}
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-
 const SUPABASE_URL="https://yrtqjhtyaguersnatqbe.supabase.co";
 const SUPABASE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlydHFqaHR5YWd1ZXJzbmF0cWJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3Mzc3NjUsImV4cCI6MjA4ODMxMzc2NX0.EABgCVRaTm0YhIOTUJmxtHdSqelTI-VNH6xI8tqjhV8";
 
@@ -246,15 +291,25 @@ const form=document.getElementById("chat-form");
 const input=document.getElementById("message");
 const typingDiv=document.getElementById("typing");
 
-let lastMessageTime=0;
-const MESSAGE_COOLDOWN=800;
-const MAX_LENGTH=400;
-
 /* enter login */
 function enterLogin(){
 document.getElementById("update-screen").style.display="none";
 document.getElementById("nickname-screen").style.display="flex";
 }
+
+/* Dark/Light toggle */
+const themeBtn=document.getElementById("theme-toggle");
+themeBtn.onclick=()=>{
+document.body.classList.toggle("dark");
+themeBtn.textContent=document.body.classList.contains("dark")?"Light Mode":"Dark Mode";
+};
+
+/* Show all versions */
+const showAllBtn=document.getElementById("show-all-btn");
+showAllBtn.onclick=()=>{
+document.getElementById("older-versions").style.display="block";
+showAllBtn.style.display="none";
+};
 
 /* time format */
 function formatTime(date){
@@ -307,9 +362,7 @@ div.innerHTML=`
 </div>
 `;
 const panel=div.querySelector(".reaction-panel");
-div.onclick=()=>{
-panel.style.display=panel.style.display==="flex"?"none":"flex";
-};
+div.onclick=()=>{panel.style.display=panel.style.display==="flex"?"none":"flex";};
 panel.querySelectorAll("span").forEach(btn=>{
 btn.onclick=(e)=>{
 e.stopPropagation();
@@ -347,37 +400,25 @@ reactionsDiv.appendChild(span);
 async function addReaction(messageId,emoji){
 await supabaseClient
 .from("reactions")
-.insert({
-message_id:messageId,
-username:currentUser,
-emoji:emoji
-});
+.insert({message_id:messageId,username:currentUser,emoji:emoji});
 }
 
 /* scroll */
-function scrollBottom(){
-wrapper.scrollTop=wrapper.scrollHeight;
-}
+function scrollBottom(){wrapper.scrollTop=wrapper.scrollHeight;}
 
 /* realtime */
 function subscribeRealtime(){
-supabaseClient
-.channel("messages")
+supabaseClient.channel("messages")
 .on("postgres_changes",{event:"INSERT",schema:"public",table:"messages"},payload=>{
-if(payload.new.name!==currentUser){
-addMessage(payload.new);
-}
+if(payload.new.name!==currentUser)addMessage(payload.new);
 })
 .subscribe();
 
-supabaseClient
-.channel("reactions")
+supabaseClient.channel("reactions")
 .on("postgres_changes",{event:"INSERT",schema:"public",table:"reactions"},payload=>{
 const messageId=payload.new.message_id;
 const message=document.querySelector('.message[data-id="'+messageId+'"]');
-if(message){
-loadReactions(messageId,message);
-}
+if(message) loadReactions(messageId,message);
 })
 .subscribe();
 }
@@ -385,35 +426,19 @@ loadReactions(messageId,message);
 /* send message */
 form.addEventListener("submit",async e=>{
 e.preventDefault();
-const now=Date.now();
-if(now-lastMessageTime<MESSAGE_COOLDOWN) return;
-lastMessageTime=now;
 let content=input.value.trim();
 if(!content) return;
-if(content.length>MAX_LENGTH){
-alert("Message too long");
-return;
-}
 input.value="";
-const {data}=await supabaseClient
-.from("messages")
-.insert({name:currentUser,content})
-.select()
-.single();
+const {data}=await supabaseClient.from("messages").insert({name:currentUser,content}).select().single();
 addMessage(data);
 });
 
 /* typing */
 input.addEventListener("input",()=>{
-supabaseClient.channel("typing").send({
-type:"broadcast",
-event:"typing",
-payload:{user:currentUser}
-});
+supabaseClient.channel("typing").send({type:"broadcast",event:"typing",payload:{user:currentUser}});
 });
 
-supabaseClient
-.channel("typing")
+supabaseClient.channel("typing")
 .on("broadcast",{event:"typing"},payload=>{
 if(payload.payload.user!==currentUser){
 typingDiv.textContent=payload.payload.user+" is typing...";
